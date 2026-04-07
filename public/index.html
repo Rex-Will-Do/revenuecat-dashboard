@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RevenueCat Charts Explorer — Dark Noise Metrics</title>
+  <meta name="description" content="Live subscription metrics dashboard for Dark Noise, powered by RevenueCat Charts API v2. Built by Rex." />
+
+  <!-- Fonts: Inter for UI, JetBrains Mono for data -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* =================================================================
+       DESIGN TOKENS
+       Dark theme dashboard for developer audience.
+       Palette: deep navy/slate surfaces, teal-cyan accent (matching
+       RevenueCat's brand direction), with muted status colors.
+       ================================================================= */
+    :root {
+      /* Type scale — fluid clamp values */
+      --text-xs: clamp(0.6875rem, 0.65rem + 0.2vw, 0.8125rem);
+      --text-sm: clamp(0.8125rem, 0.78rem + 0.2vw, 0.9375rem);
+      --text-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1.0625rem);
+      --text-lg: clamp(1.0625rem, 1rem + 0.4vw, 1.375rem);
+      --text-xl: clamp(1.375rem, 1.15rem + 0.8vw, 1.875rem);
+
+      /* Spacing — 4px grid */
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --space-16: 4rem;
+
+      /* Radii */
+      --radius-sm: 0.375rem;
+      --radius-md: 0.625rem;
+      --radius-lg: 0.875rem;
+
+      /* Transitions */
+      --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-medium: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+
+      /* Fonts */
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* Dark theme (default for this dashboard) */
+    [data-theme="dark"] {
+      --color-bg: #0b0e14;
+      --color-surface: #111520;
+      --color-surface-2: #161b28;
+      --color-surface-3: #1c2233;
+      --color-border: #252d40;
+      --color-border-subtle: #1e2536;
+      --color-text: #e2e6ed;
+      --color-text-muted: #8891a4;
+      --color-text-faint: #565f73;
+      --color-primary: #22c5a0;
+      --color-primary-muted: rgba(34, 197, 160, 0.15);
+      --color-primary-hover: #1aab8b;
+      --color-accent-blue: #5b8def;
+      --color-accent-purple: #9678f0;
+      --color-accent-amber: #f0a050;
+      --color-success: #3dcf8e;
+      --color-error: #ef6b6b;
+      --color-warning: #f0a050;
+      --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+      --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    /* =================================================================
+       BASE RESET & GLOBAL STYLES
+       ================================================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100dvh;
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: 1.6;
+      color: var(--color-text);
+      background-color: var(--color-bg);
+    }
+
+    /* =================================================================
+       LAYOUT SHELL
+       Max-width container with responsive padding.
+       ================================================================= */
+    .dashboard {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: var(--space-6) var(--space-5);
+    }
+
+    @media (min-width: 768px) {
+      .dashboard {
+        padding: var(--space-8) var(--space-8);
+      }
+    }
+
+    /* =================================================================
+       HEADER
+       Logo mark + title + subtitle, with a status pill and timestamp.
+       ================================================================= */
+    .header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      margin-bottom: var(--space-8);
+    }
+
+    .header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    /* SVG logo mark — a stylized bar chart icon */
+    .logo-mark {
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-text);
+    }
+
+    .header-subtitle {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      margin-top: var(--space-1);
+      line-height: 1.4;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-shrink: 0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      background: var(--color-primary-muted);
+      border: 1px solid rgba(34, 197, 160, 0.2);
+      border-radius: 9999px;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--color-primary);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .last-updated {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      font-family: var(--font-mono);
+    }
+
+    .refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      background: transparent;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      font-family: var(--font-sans);
+    }
+    .refresh-btn:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+      background: var(--color-primary-muted);
+    }
+    .refresh-btn svg {
+      transition: transform 0.4s ease;
+    }
+    .refresh-btn.spinning svg {
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .data-freshness-notice {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-6);
+      padding: var(--space-3) var(--space-4);
+      background: rgba(34, 197, 160, 0.05);
+      border: 1px solid rgba(34, 197, 160, 0.12);
+      border-radius: 8px;
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+    .data-freshness-notice svg {
+      flex-shrink: 0;
+      color: var(--color-primary);
+      opacity: 0.7;
+    }
+    .data-freshness-notice strong {
+      color: var(--color-text);
+    }
+
+    /* Divider below header */
+    .header-divider {
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        var(--color-border) 0%,
+        var(--color-border-subtle) 100%
+      );
+    }
+
+    /* =================================================================
+       KPI CARDS
+       Top row of 4 metric cards. CSS Grid responsive layout.
+       ================================================================= */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+      margin-bottom: var(--space-8);
+    }
+
+    @media (min-width: 480px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (min-width: 900px) {
+      .kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-subtle);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5) var(--space-5);
+      position: relative;
+      overflow: hidden;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .kpi-card:hover {
+      border-color: var(--color-border);
+      box-shadow: var(--shadow-card-hover);
+    }
+
+    /* Subtle top-border accent line on each card */
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--kpi-accent, var(--color-primary));
+      opacity: 0.6;
+    }
+
+    .kpi-label {
+      font-size: var(--text-xs);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-2);
+    }
+
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-xl);
+      font-weight: 600;
+      color: var(--color-text);
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .kpi-description {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      margin-top: var(--space-2);
+    }
+
+    /* Per-card accent colors */
+    .kpi-card--mrr { --kpi-accent: var(--color-primary); }
+    .kpi-card--subs { --kpi-accent: var(--color-accent-blue); }
+    .kpi-card--trial { --kpi-accent: var(--color-accent-purple); }
+    .kpi-card--churn { --kpi-accent: var(--color-accent-amber); }
+
+    /* Skeleton loading state for KPI values */
+    .kpi-value.loading {
+      background: linear-gradient(
+        90deg,
+        var(--color-surface-2) 25%,
+        var(--color-surface-3) 50%,
+        var(--color-surface-2) 75%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+      color: transparent;
+      user-select: none;
+      min-width: 100px;
+      min-height: 1.6em;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* =================================================================
+       CHARTS SECTION
+       Line/bar charts in responsive grid. Each chart inside a card.
+       ================================================================= */
+    .charts-section-title {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--color-text);
+      margin-bottom: var(--space-5);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .charts-section-title::before {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 1.1em;
+      background: var(--color-primary);
+      border-radius: 2px;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-5);
+      margin-bottom: var(--space-8);
+    }
+
+    @media (min-width: 768px) {
+      .charts-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* The trial conversion chart spans full width on larger screens */
+    @media (min-width: 768px) {
+      .chart-card--wide {
+        grid-column: 1 / -1;
+      }
+    }
+
+    .chart-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-subtle);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      transition: border-color var(--transition-fast);
+    }
+
+    .chart-card:hover {
+      border-color: var(--color-border);
+    }
+
+    .chart-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+    }
+
+    .chart-card-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .chart-card-badge {
+      font-size: var(--text-xs);
+      font-family: var(--font-mono);
+      color: var(--color-text-faint);
+      background: var(--color-surface-2);
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-sm);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 280px;
+    }
+
+    @media (max-width: 479px) {
+      .chart-wrapper {
+        height: 220px;
+      }
+    }
+
+    .chart-wrapper canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Chart loading placeholder */
+    .chart-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--color-text-faint);
+      font-size: var(--text-sm);
+      gap: var(--space-2);
+    }
+
+    .chart-loading .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--color-border);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error state for chart */
+    .chart-error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: var(--space-2);
+      color: var(--color-text-faint);
+      font-size: var(--text-sm);
+      text-align: center;
+    }
+
+    .chart-error button {
+      margin-top: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      background: var(--color-surface-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      color: var(--color-primary);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--transition-fast);
+    }
+
+    .chart-error button:hover {
+      background: var(--color-surface-2);
+    }
+
+    /* =================================================================
+       OVERVIEW STATS BAR
+       A secondary row below charts showing all overview metrics.
+       ================================================================= */
+    .overview-bar {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-subtle);
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
+      margin-bottom: var(--space-8);
+    }
+
+    @media (min-width: 600px) {
+      .overview-bar {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (min-width: 900px) {
+      .overview-bar {
+        grid-template-columns: repeat(7, 1fr);
+      }
+    }
+
+    .overview-stat {
+      text-align: center;
+      padding: var(--space-2) 0;
+    }
+
+    .overview-stat-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--color-text);
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+
+    .overview-stat-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      margin-top: var(--space-1);
+    }
+
+    /* =================================================================
+       FOOTER
+       Simple centered footer with muted text.
+       ================================================================= */
+    .footer {
+      text-align: center;
+      padding: var(--space-6) 0 var(--space-4);
+      border-top: 1px solid var(--color-border-subtle);
+      color: var(--color-text-faint);
+      font-size: var(--text-xs);
+      line-height: 1.6;
+    }
+
+    .footer a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+      transition: color var(--transition-fast);
+    }
+
+    .footer a:hover {
+      color: var(--color-primary);
+    }
+
+    /* =================================================================
+       TOAST NOTIFICATION
+       Rate-limit toast that appears briefly when a 429 is encountered.
+       ================================================================= */
+    .toast {
+      position: fixed;
+      bottom: var(--space-6);
+      right: var(--space-6);
+      background: var(--color-surface-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-5);
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      box-shadow: var(--shadow-card);
+      transform: translateY(120%);
+      opacity: 0;
+      transition: transform var(--transition-medium), opacity var(--transition-medium);
+      z-index: 100;
+      max-width: 340px;
+    }
+
+    .toast.visible {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* =================================================================
+       FOCUS STATES (Accessibility)
+       ================================================================= */
+    :focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 3px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Utility: screen-reader only */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="dashboard" role="main">
+    <!-- ============================================================
+         HEADER
+         Brand mark, title, live status, and last-updated timestamp.
+         ============================================================ -->
+    <header class="header">
+      <div class="header-top">
+        <div class="header-brand">
+          <!-- Inline SVG logo: abstract chart bars forming an upward trend -->
+          <svg class="logo-mark" width="36" height="36" viewBox="0 0 36 36" fill="none" aria-label="RevenueCat Charts Explorer logo">
+            <rect x="3" y="22" width="6" height="11" rx="1.5" fill="var(--color-primary)" opacity="0.4" />
+            <rect x="12" y="15" width="6" height="18" rx="1.5" fill="var(--color-primary)" opacity="0.6" />
+            <rect x="21" y="8" width="6" height="25" rx="1.5" fill="var(--color-primary)" opacity="0.8" />
+            <rect x="30" y="3" width="3" height="30" rx="1.5" fill="var(--color-primary)" />
+            <circle cx="6" cy="19" r="2" fill="var(--color-text)" />
+            <circle cx="15" cy="12" r="2" fill="var(--color-text)" />
+            <circle cx="24" cy="6" r="2" fill="var(--color-text)" />
+            <path d="M6 19L15 12L24 6" stroke="var(--color-text)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" />
+          </svg>
+
+          <div>
+            <h1 class="header-title">RevenueCat Charts Explorer</h1>
+            <p class="header-subtitle">Built by Rex · Powered by RevenueCat API v2</p>
+          </div>
+        </div>
+
+        <div class="header-meta">
+          <span class="status-pill" data-testid="status-pill">
+            <span class="status-dot"></span>
+            <span id="statusText">Connecting…</span>
+          </span>
+          <span class="last-updated" id="lastUpdated" data-testid="text-last-updated">--:--</span>
+          <button class="refresh-btn" id="refreshBtn" onclick="handleRefresh()" title="Reload page to fetch latest data">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.5 2A5 5 0 1 0 11 6.5"/>
+              <polyline points="10.5 0.5 10.5 2.5 8.5 2.5"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="header-divider"></div>
+    </header>
+
+    <!-- ============================================================
+         KPI CARDS
+         Four primary metrics: MRR, Active Subs, Trial Conversion, Churn.
+         Values load from the overview endpoint on page load.
+         ============================================================ -->
+    <section aria-label="Key metrics">
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-card--mrr">
+          <div class="kpi-label">Monthly Recurring Revenue</div>
+          <div class="kpi-value loading" id="kpiMrr" data-testid="kpi-mrr">$0,000</div>
+          <div class="kpi-description">Current MRR from active subs</div>
+        </div>
+
+        <div class="kpi-card kpi-card--subs">
+          <div class="kpi-label">Active Subscriptions</div>
+          <div class="kpi-value loading" id="kpiSubs" data-testid="kpi-subs">0,000</div>
+          <div class="kpi-description">Paying subscribers right now</div>
+        </div>
+
+        <div class="kpi-card kpi-card--trial">
+          <div class="kpi-label">Active Trials</div>
+          <div class="kpi-value loading" id="kpiTrials" data-testid="kpi-trials">0%</div>
+          <div class="kpi-description">Users currently in trial period</div>
+        </div>
+
+        <div class="kpi-card kpi-card--churn">
+          <div class="kpi-label">Revenue (Last 28d)</div>
+          <div class="kpi-value loading" id="kpiRevenue" data-testid="kpi-revenue">0%</div>
+          <div class="kpi-description">Total revenue in last 28 days</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data freshness notice -->
+    <div class="data-freshness-notice" id="freshnessNotice">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7" cy="7" r="6"/>
+        <path d="M7 4v3l2 1.5"/>
+      </svg>
+      <span><strong>Data refreshes on page load</strong> — pulled live from the RevenueCat Charts API each visit. Hit <strong>Refresh</strong> in the top-right corner (or reload this page) to get the most up-to-date numbers.</span>
+    </div>
+
+    <!-- ============================================================
+         OVERVIEW METRICS BAR
+         Secondary stats from the overview endpoint.
+         ============================================================ -->
+    <section aria-label="Overview metrics">
+      <div class="overview-bar" id="overviewBar" data-testid="overview-bar">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- ============================================================
+         CHARTS SECTION
+         Three charts: MRR over time, Active Subs over time,
+         and Trial Conversion Rate as a bar chart.
+         Charts fetch on-demand with 13s delays to respect rate limits.
+         ============================================================ -->
+    <section aria-label="Charts">
+      <h2 class="charts-section-title">Trend Charts</h2>
+
+      <div class="charts-grid">
+        <!-- MRR Over Time (line chart) -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <span class="chart-card-title">MRR Over Time</span>
+            <span class="chart-card-badge">Monthly</span>
+          </div>
+          <div class="chart-wrapper" id="chartMrrWrapper" data-testid="chart-mrr">
+            <div class="chart-loading"><div class="spinner"></div>Fetching MRR data…</div>
+          </div>
+        </div>
+
+        <!-- Active Subscriptions Over Time (line chart) -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <span class="chart-card-title">Active Subscriptions</span>
+            <span class="chart-card-badge">Monthly</span>
+          </div>
+          <div class="chart-wrapper" id="chartSubsWrapper" data-testid="chart-subs">
+            <div class="chart-loading"><div class="spinner"></div>Fetching subscription data…</div>
+          </div>
+        </div>
+
+        <!-- Trial Conversion Rate (bar chart, full width) -->
+        <div class="chart-card chart-card--wide">
+          <div class="chart-card-header">
+            <span class="chart-card-title">Trial Conversion Rate</span>
+            <span class="chart-card-badge">Monthly</span>
+          </div>
+          <div class="chart-wrapper" id="chartTrialWrapper" data-testid="chart-trial">
+            <div class="chart-loading"><div class="spinner"></div>Fetching trial conversion data…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         FOOTER
+         Attribution and data source notice.
+         ============================================================ -->
+    <footer class="footer">
+      <p>Rex is an autonomous AI agent. Data sourced from <strong>Dark Noise</strong> via <a href="https://www.revenuecat.com/docs/api-v2" target="_blank" rel="noopener">RevenueCat Charts API</a>.</p>
+      <p style="margin-top: var(--space-1);">Data sourced from a live RevenueCat project via Charts API v2.</p>
+    </footer>
+  </main>
+
+  <!-- Toast notification for rate-limit / errors -->
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script>
+    /**
+     * =================================================================
+     * RevenueCat Charts Explorer — Client-Side Logic
+     *
+     * This dashboard fetches live data from the RevenueCat Charts API v2.
+     * It displays overview KPIs and time-series charts for key metrics.
+     *
+     * ARCHITECTURE NOTES:
+     * - All API calls happen client-side (CORS is supported on v2).
+     * - Charts are fetched sequentially with a 13s delay between each
+     *   to stay within the 5 req/min rate limit.
+     * - 429 (rate limit) responses trigger automatic retry with backoff.
+     * - In production, proxy API calls through a server-side endpoint
+     *   so the API key is never exposed to the client.
+     * =================================================================
+     */
+
+    // ── Configuration ──────────────────────────────────────────────
+    // All RevenueCat API calls go through /api/metrics (Vercel serverless).
+    // Credentials (API key + project ID) live in Vercel environment variables
+    // and are never exposed in this client-side file.
+    const CONFIG = {
+      PROXY_URL: '/api/metrics',  // Server-side proxy — key stays in env vars
+      CHART_DELAY_MS: 13000,      // 13s between chart fetches (rate limit: 5/min)
+      MAX_RETRIES: 3,
+      RETRY_BASE_DELAY_MS: 15000,
+    };
+
+    // ── DOM References ─────────────────────────────────────────────
+    const dom = {
+      statusText: document.getElementById('statusText'),
+      lastUpdated: document.getElementById('lastUpdated'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      kpiMrr: document.getElementById('kpiMrr'),
+      kpiSubs: document.getElementById('kpiSubs'),
+      kpiTrials: document.getElementById('kpiTrials'),
+      kpiRevenue: document.getElementById('kpiRevenue'),
+      overviewBar: document.getElementById('overviewBar'),
+      chartMrrWrapper: document.getElementById('chartMrrWrapper'),
+      chartSubsWrapper: document.getElementById('chartSubsWrapper'),
+      chartTrialWrapper: document.getElementById('chartTrialWrapper'),
+      toast: document.getElementById('toast'),
+    };
+
+    // ── Utility Functions ──────────────────────────────────────────
+
+    /**
+     * Format a number as USD currency (e.g., $4,531).
+     */
+    function formatCurrency(value) {
+      if (value == null) return '—';
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(value);
+    }
+
+    /**
+     * Format a large number with commas (e.g., 13,682).
+     */
+    function formatNumber(value) {
+      if (value == null) return '—';
+      return new Intl.NumberFormat('en-US').format(value);
+    }
+
+    /**
+     * Format a percentage (e.g., 0.42 -> "42.0%").
+     */
+    function formatPercent(value) {
+      if (value == null) return '—';
+      // If the value is already a percentage (like 42.3), just display it
+      if (value > 1) return `${value.toFixed(1)}%`;
+      return `${(value * 100).toFixed(1)}%`;
+    }
+
+    /**
+     * Show a brief toast message at the bottom-right of the screen.
+     */
+    function showToast(message, durationMs = 4000) {
+      dom.toast.textContent = message;
+      dom.toast.classList.add('visible');
+      setTimeout(() => dom.toast.classList.remove('visible'), durationMs);
+    }
+
+    /**
+     * Refresh button handler — reloads the page to pull fresh API data.
+     * This is the correct behavior for a static dashboard: every page load
+     * triggers a fresh fetch sequence from the RevenueCat API.
+     */
+    function handleRefresh() {
+      window.location.reload();
+    }
+
+    /**
+     * Update the "Last updated" timestamp in the header.
+     */
+    function updateTimestamp() {
+      const now = new Date();
+      const time = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      dom.lastUpdated.textContent = `Updated ${time}`;
+    }
+
+    /**
+     * Sleep helper for sequential chart fetching with rate-limit delay.
+     */
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ── API Layer ──────────────────────────────────────────────────
+
+    /**
+     * Make an authenticated GET request to the RevenueCat API.
+     * Handles 429 rate-limit responses with exponential backoff retry.
+     *
+     * @param {string} path - API path relative to the project (e.g., '/metrics/overview')
+     * @param {object} params - Query parameters
+     * @param {number} retryCount - Current retry attempt (used internally)
+     * @returns {Promise<object>} - Parsed JSON response
+     */
+    async function apiGet(path, params = {}, retryCount = 0) {
+      // Route to the server-side proxy — credentials never touch the browser
+      const url = new URL(CONFIG.PROXY_URL, window.location.origin);
+
+      // Translate RevenueCat path into proxy query params
+      // /metrics/overview  →  ?type=overview
+      // /charts/mrr        →  ?type=chart&slug=mrr
+      if (path === '/metrics/overview') {
+        url.searchParams.set('type', 'overview');
+      } else {
+        const slugMatch = path.match(/\/charts\/([^/?]+)/);
+        if (slugMatch) {
+          url.searchParams.set('type', 'chart');
+          url.searchParams.set('slug', slugMatch[1]);
+        }
+      }
+      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+      const response = await fetch(url.toString());
+
+      // Handle rate limiting (429) with backoff retry
+      if (response.status === 429) {
+        if (retryCount >= CONFIG.MAX_RETRIES) {
+          throw new Error('Rate limit exceeded after maximum retries');
+        }
+        const delay = CONFIG.RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
+        showToast(`Rate limited — retrying in ${Math.round(delay / 1000)}s…`);
+        await sleep(delay);
+        return apiGet(path, params, retryCount + 1);
+      }
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    }
+
+    // ── Data Fetching & Rendering ──────────────────────────────────
+
+    /**
+     * Fetch the overview metrics and populate KPI cards + overview bar.
+     * This is the first call on page load.
+     */
+    async function fetchOverview() {
+      try {
+        const data = await apiGet('/metrics/overview');
+        const metrics = data.metrics || [];
+
+        // Build a lookup map keyed by metric id
+        const lookup = {};
+        metrics.forEach(m => {
+          lookup[m.id] = m.value;
+        });
+
+        // Populate KPI cards — removing loading skeleton
+        setKpiValue(dom.kpiMrr, formatCurrency(lookup['mrr']));
+        setKpiValue(dom.kpiSubs, formatNumber(lookup['active_subscriptions']));
+        setKpiValue(dom.kpiTrials, formatNumber(lookup['active_trials']));
+        setKpiValue(dom.kpiRevenue, formatCurrency(lookup['revenue']));
+
+        // Populate overview bar with all metrics
+        renderOverviewBar(metrics);
+
+        // Update status to "Live"
+        dom.statusText.textContent = 'Live';
+        updateTimestamp();
+
+      } catch (err) {
+        console.error('Overview fetch failed:', err);
+        dom.statusText.textContent = 'Error';
+        showToast('Failed to fetch overview metrics. Check console for details.');
+
+        // Remove loading state even on error
+        [dom.kpiMrr, dom.kpiSubs, dom.kpiTrials, dom.kpiRevenue].forEach(el => {
+          el.classList.remove('loading');
+          el.textContent = '—';
+        });
+      }
+    }
+
+    /**
+     * Remove loading skeleton from a KPI card and set its value.
+     */
+    function setKpiValue(element, value) {
+      element.classList.remove('loading');
+      element.textContent = value;
+    }
+
+    /**
+     * Render the overview stats bar with all metrics from the API.
+     * Uses metric `id` for formatting logic, and `unit` field for currency detection.
+     */
+    function renderOverviewBar(metrics) {
+      if (!metrics.length) {
+        dom.overviewBar.innerHTML = '<p style="color: var(--color-text-faint); grid-column: 1/-1; text-align: center;">No overview data available.</p>';
+        return;
+      }
+
+      // Short display names for cleaner overview bar
+      const shortNames = {
+        active_trials: 'Active Trials',
+        active_subscriptions: 'Active Subs',
+        mrr: 'MRR',
+        revenue: 'Revenue',
+        new_customers: 'New Customers',
+        active_users: 'Active Users',
+        num_tx_last_28_days: 'Transactions',
+      };
+
+      dom.overviewBar.innerHTML = metrics.map(m => {
+        const displayValue = m.unit === '$' ? formatCurrency(m.value) : formatNumber(m.value);
+        const label = shortNames[m.id] || m.name || m.id || 'Unknown';
+
+        return `
+          <div class="overview-stat">
+            <div class="overview-stat-value" data-testid="overview-${m.id}">${displayValue}</div>
+            <div class="overview-stat-label">${label}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ── Chart.js Configuration ─────────────────────────────────────
+
+    /**
+     * Shared Chart.js defaults for this dashboard's dark theme.
+     * Applied globally so each chart inherits consistent styling.
+     */
+    Chart.defaults.color = '#8891a4'; // --color-text-muted
+    Chart.defaults.borderColor = '#252d40'; // --color-border
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.font.size = 12;
+    Chart.defaults.plugins.legend.display = false;
+    Chart.defaults.plugins.tooltip.backgroundColor = '#1c2233';
+    Chart.defaults.plugins.tooltip.borderColor = '#252d40';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.titleFont = { family: "'Inter', sans-serif", size: 12, weight: '600' };
+    Chart.defaults.plugins.tooltip.bodyFont = { family: "'JetBrains Mono', monospace", size: 12 };
+    Chart.defaults.plugins.tooltip.padding = { top: 8, bottom: 8, left: 12, right: 12 };
+    Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    Chart.defaults.plugins.tooltip.displayColors = false;
+
+    /**
+     * Create a gradient fill for line charts.
+     * Gives lines a subtle area fill that fades to transparent.
+     */
+    function createGradient(ctx, color) {
+      const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+      gradient.addColorStop(0, color.replace(')', ', 0.25)').replace('rgb', 'rgba'));
+      gradient.addColorStop(1, color.replace(')', ', 0.0)').replace('rgb', 'rgba'));
+      return gradient;
+    }
+
+    /**
+     * Fetch a chart endpoint and render it.
+     * Each chart name maps to a specific rendering function.
+     *
+     * @param {string} chartName - API chart name (e.g., 'mrr', 'actives')
+     * @param {HTMLElement} wrapper - Container element for the chart
+     * @param {Function} renderFn - Function to build the Chart.js instance
+     */
+    async function fetchAndRenderChart(chartName, wrapper, renderFn) {
+      try {
+        const data = await apiGet(`/charts/${chartName}`, { resolution: 'month' });
+        wrapper.innerHTML = '<canvas></canvas>';
+        const canvas = wrapper.querySelector('canvas');
+        const ctx = canvas.getContext('2d');
+        renderFn(ctx, data);
+        updateTimestamp();
+      } catch (err) {
+        console.error(`Chart "${chartName}" failed:`, err);
+        wrapper.innerHTML = `
+          <div class="chart-error">
+            <span>Failed to load ${chartName} data</span>
+            <span style="font-size: var(--text-xs);">${err.message}</span>
+            <button onclick="retryChart('${chartName}')">Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Extract labels (dates) and values from the RevenueCat chart response.
+     *
+     * Actual API response shape:
+     *   { values: [{ cohort: 1680307200, value: 702.27, measure: 0, incomplete: false }, ...] }
+     *
+     * - `cohort` is a Unix timestamp in SECONDS (not ms)
+     * - `value` is the metric value for that period
+     * - `measure` indicates which metric (some endpoints return multiple measures per cohort)
+     *
+     * For multi-measure charts (like trial_conversion_rate), the `measures` array
+     * indicates which measure is `chartable: true`. We auto-detect the chartable
+     * measure index and filter to only those values.
+     */
+    function extractChartData(data) {
+      let values = data.values || data.data || [];
+      if (!Array.isArray(values)) values = [];
+
+      // Detect which measure index to chart.
+      // If the API provides a `measures` array, find the one marked as `chartable`.
+      // Otherwise default to measure 0 (the primary metric).
+      let targetMeasure = 0;
+      if (data.measures && Array.isArray(data.measures)) {
+        const chartableIdx = data.measures.findIndex(m => m.chartable === true);
+        if (chartableIdx >= 0) targetMeasure = chartableIdx;
+      }
+
+      // Filter to only the target measure
+      const filtered = values.filter(v => v.measure === targetMeasure);
+
+      const labels = filtered.map(v => {
+        // `cohort` is Unix seconds — multiply by 1000 for JS Date
+        const ts = v.cohort || v.date || v.x || v.timestamp || 0;
+        const date = new Date(ts * 1000);
+        if (isNaN(date.getTime())) {
+          return new Date(ts).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        }
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      });
+
+      const dataPoints = filtered.map(v => v.value ?? v.y ?? v.amount ?? 0);
+
+      return { labels, dataPoints };
+    }
+
+    // ── Chart Rendering Functions ──────────────────────────────────
+
+    /**
+     * MRR Line Chart — shows monthly recurring revenue over time.
+     * Uses a teal line with gradient fill.
+     */
+    function renderMrrChart(ctx, data) {
+      const { labels, dataPoints } = extractChartData(data);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: dataPoints,
+            borderColor: '#22c5a0',
+            backgroundColor: createAreaGradient(ctx, 34, 197, 160),
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#22c5a0',
+            pointHoverBorderColor: '#0b0e14',
+            pointHoverBorderWidth: 2,
+            fill: true,
+            tension: 0.35,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 8, font: { size: 11 } },
+            },
+            y: {
+              grid: { color: '#1e2536' },
+              ticks: {
+                font: { family: "'JetBrains Mono', monospace", size: 11 },
+                callback: v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v),
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: ctx => formatCurrency(ctx.parsed.y),
+              },
+            },
+          },
+        },
+      });
+    }
+
+    /**
+     * Active Subscriptions Line Chart — shows subscriber count over time.
+     * Uses a blue line with gradient fill.
+     */
+    function renderSubsChart(ctx, data) {
+      const { labels, dataPoints } = extractChartData(data);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: dataPoints,
+            borderColor: '#5b8def',
+            backgroundColor: createAreaGradient(ctx, 91, 141, 239),
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#5b8def',
+            pointHoverBorderColor: '#0b0e14',
+            pointHoverBorderWidth: 2,
+            fill: true,
+            tension: 0.35,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 8, font: { size: 11 } },
+            },
+            y: {
+              grid: { color: '#1e2536' },
+              ticks: {
+                font: { family: "'JetBrains Mono', monospace", size: 11 },
+                callback: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v,
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: ctx => formatNumber(ctx.parsed.y) + ' subscribers',
+              },
+            },
+          },
+        },
+      });
+    }
+
+    /**
+     * Trial Conversion Rate Bar Chart — shows conversion % over time.
+     * Uses purple bars with rounded corners.
+     */
+    function renderTrialChart(ctx, data) {
+      const { labels, dataPoints } = extractChartData(data);
+
+      // Values from the API are already in percentage form (e.g. 49.26 = 49.26%)
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: dataPoints,
+            backgroundColor: 'rgba(150, 120, 240, 0.6)',
+            hoverBackgroundColor: 'rgba(150, 120, 240, 0.85)',
+            borderColor: '#9678f0',
+            borderWidth: 1,
+            borderRadius: 4,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 12, font: { size: 11 } },
+            },
+            y: {
+              grid: { color: '#1e2536' },
+              ticks: {
+                font: { family: "'JetBrains Mono', monospace", size: 11 },
+                callback: v => v.toFixed(0) + '%',
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: ctx => ctx.parsed.y.toFixed(1) + '% conversion',
+              },
+            },
+          },
+        },
+      });
+    }
+
+    /**
+     * Create a vertical gradient for line chart area fills.
+     * Takes RGB components to build an rgba gradient from semi-opaque to transparent.
+     */
+    function createAreaGradient(ctx, r, g, b) {
+      const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.2)`);
+      gradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, 0.05)`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+      return gradient;
+    }
+
+    // ── Retry Handler ──────────────────────────────────────────────
+
+    /**
+     * Allow users to retry a failed chart fetch from the error state.
+     * Called from the "Retry" button rendered in the chart error UI.
+     */
+    window.retryChart = async function(chartName) {
+      const chartMap = {
+        mrr: { wrapper: dom.chartMrrWrapper, render: renderMrrChart },
+        actives: { wrapper: dom.chartSubsWrapper, render: renderSubsChart },
+        trial_conversion_rate: { wrapper: dom.chartTrialWrapper, render: renderTrialChart },
+      };
+
+      const chart = chartMap[chartName];
+      if (!chart) return;
+
+      chart.wrapper.innerHTML = `<div class="chart-loading"><div class="spinner"></div>Retrying…</div>`;
+      await fetchAndRenderChart(chartName, chart.wrapper, chart.render);
+    };
+
+    // ── Initialization ─────────────────────────────────────────────
+
+    /**
+     * Main initialization sequence:
+     * 1. Fetch overview metrics (fast, single request)
+     * 2. Sequentially fetch chart data with 13s delays to respect rate limits
+     *
+     * The sequential approach ensures we never exceed 5 req/min.
+     */
+
+    // =================================================================
+    // SEED DATA — pre-fetched from RevenueCat API on 2026-04-07
+    // Charts render instantly from this; live API refreshes in background
+    // =================================================================
+    const SEED_DATA = {
+      mrr: [{"cohort":1680307200,"value":702.27},{"cohort":1682899200,"value":866.22},{"cohort":1685577600,"value":1106.88},{"cohort":1688169600,"value":1346.97},{"cohort":1690848000,"value":1470.03},{"cohort":1693526400,"value":2617.47},{"cohort":1696118400,"value":3255.63},{"cohort":1698796800,"value":3621.79},{"cohort":1701388800,"value":3756.26},{"cohort":1704067200,"value":4096.9},{"cohort":1706745600,"value":4424.33},{"cohort":1709251200,"value":4714.78},{"cohort":1711929600,"value":4668.03},{"cohort":1714521600,"value":4734.95},{"cohort":1717200000,"value":4825.0},{"cohort":1719792000,"value":4881.12},{"cohort":1722470400,"value":4972.26},{"cohort":1725148800,"value":4689.27},{"cohort":1727740800,"value":4592.88},{"cohort":1730419200,"value":4611.51},{"cohort":1733011200,"value":4658.17},{"cohort":1735689600,"value":4642.17},{"cohort":1738368000,"value":4641.24},{"cohort":1740787200,"value":4617.23},{"cohort":1743465600,"value":4585.61},{"cohort":1746057600,"value":4553.21},{"cohort":1748736000,"value":4608.91},{"cohort":1751328000,"value":4623.16},{"cohort":1754006400,"value":4587.33},{"cohort":1756684800,"value":4460.62},{"cohort":1759276800,"value":4322.57},{"cohort":1761955200,"value":4421.65},{"cohort":1764547200,"value":4411.45},{"cohort":1767225600,"value":4544.52},{"cohort":1769904000,"value":4561.94},{"cohort":1772323200,"value":4541.71},{"cohort":1775001600,"value":4527.86}],
+      actives: [{"cohort":1680307200,"value":350.0},{"cohort":1682899200,"value":457.0},{"cohort":1685577600,"value":594.0},{"cohort":1688169600,"value":723.0},{"cohort":1690848000,"value":802.0},{"cohort":1693526400,"value":1399.0},{"cohort":1696118400,"value":1781.0},{"cohort":1698796800,"value":2037.0},{"cohort":1701388800,"value":2130.0},{"cohort":1704067200,"value":2328.0},{"cohort":1706745600,"value":2516.0},{"cohort":1709251200,"value":2701.0},{"cohort":1711929600,"value":2664.0},{"cohort":1714521600,"value":2711.0},{"cohort":1717200000,"value":2769.0},{"cohort":1719792000,"value":2805.0},{"cohort":1722470400,"value":2861.0},{"cohort":1725148800,"value":2682.0},{"cohort":1727740800,"value":2618.0},{"cohort":1730419200,"value":2593.0},{"cohort":1733011200,"value":2640.0},{"cohort":1735689600,"value":2644.0},{"cohort":1738368000,"value":2637.0},{"cohort":1740787200,"value":2626.0},{"cohort":1743465600,"value":2600.0},{"cohort":1746057600,"value":2560.0},{"cohort":1748736000,"value":2570.0},{"cohort":1751328000,"value":2584.0},{"cohort":1754006400,"value":2571.0},{"cohort":1756684800,"value":2492.0},{"cohort":1759276800,"value":2403.0},{"cohort":1761955200,"value":2470.0},{"cohort":1764547200,"value":2471.0},{"cohort":1767225600,"value":2535.0},{"cohort":1769904000,"value":2537.0},{"cohort":1772323200,"value":2530.0},{"cohort":1775001600,"value":2525.0}],
+      trial_conversion_rate: [{"cohort":1680307200,"value":49.26},{"cohort":1682899200,"value":50.79},{"cohort":1685577600,"value":45.45},{"cohort":1688169600,"value":48.37},{"cohort":1690848000,"value":41.3},{"cohort":1693526400,"value":38.32},{"cohort":1696118400,"value":44.69},{"cohort":1698796800,"value":40.81},{"cohort":1701388800,"value":44.84},{"cohort":1704067200,"value":45.99},{"cohort":1706745600,"value":44.89},{"cohort":1709251200,"value":44.02},{"cohort":1711929600,"value":45.45},{"cohort":1714521600,"value":45.35},{"cohort":1717200000,"value":42.33},{"cohort":1719792000,"value":43.89},{"cohort":1722470400,"value":44.58},{"cohort":1725148800,"value":45.13},{"cohort":1727740800,"value":42.98},{"cohort":1730419200,"value":40.45},{"cohort":1733011200,"value":44.06},{"cohort":1735689600,"value":41.58},{"cohort":1738368000,"value":47.35},{"cohort":1740787200,"value":42.96},{"cohort":1743465600,"value":40.34},{"cohort":1746057600,"value":42.01},{"cohort":1748736000,"value":39.27},{"cohort":1751328000,"value":43.58},{"cohort":1754006400,"value":36.98},{"cohort":1756684800,"value":41.95},{"cohort":1759276800,"value":44.75},{"cohort":1761955200,"value":41.8},{"cohort":1764547200,"value":41.03},{"cohort":1767225600,"value":47.41},{"cohort":1769904000,"value":39.15},{"cohort":1772323200,"value":38.46},{"cohort":1775001600,"value":42.99}]
+    };
+
+
+    // Render chart from seed data immediately, returns Chart.js instance
+    function renderFromSeed(seedValues, wrapper, renderFn) {
+      try {
+        wrapper.innerHTML = '<canvas></canvas>';
+        const canvas = wrapper.querySelector('canvas');
+        const ctx = canvas.getContext('2d');
+        const data = { values: seedValues.map((d) => ({ cohort: d.cohort, value: d.value, measure: 0 })) };
+        renderFn(ctx, data);
+        const label = wrapper.querySelector('.chart-label');
+        if (label) label.textContent = 'Seeded · refreshing…';
+      } catch (e) { console.warn('renderFromSeed error:', e); /* live fetch will retry */ }
+    }
+
+    async function init() {
+      // Render all charts instantly from seed data
+      renderFromSeed(SEED_DATA.mrr, dom.chartMrrWrapper, renderMrrChart);
+      renderFromSeed(SEED_DATA.actives, dom.chartSubsWrapper, renderSubsChart);
+      renderFromSeed(SEED_DATA.trial_conversion_rate, dom.chartTrialWrapper, renderTrialChart);
+
+      // Step 1: Fetch overview metrics immediately
+      await fetchOverview();
+
+      // Step 2: Fetch charts sequentially with rate-limit delays
+      // Each chart endpoint counts against the 5 req/min limit
+      const chartSequence = [
+        { name: 'mrr', wrapper: dom.chartMrrWrapper, render: renderMrrChart },
+        { name: 'actives', wrapper: dom.chartSubsWrapper, render: renderSubsChart },
+        { name: 'trial_conversion_rate', wrapper: dom.chartTrialWrapper, render: renderTrialChart },
+      ];
+
+      for (let i = 0; i < chartSequence.length; i++) {
+        // Wait between requests (skip delay before the first one,
+        // but add a small delay after overview to be safe)
+        if (i === 0) {
+          await sleep(CONFIG.CHART_DELAY_MS);
+        } else {
+          await sleep(CONFIG.CHART_DELAY_MS);
+        }
+
+        const { name, wrapper, render } = chartSequence[i];
+        await fetchAndRenderChart(name, wrapper, render);
+      }
+
+      showToast('All data loaded successfully', 3000);
+    }
+
+    // Kick off the dashboard
+    init();
+  </script>
+</body>
+</html>

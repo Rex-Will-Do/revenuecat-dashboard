@@ -1,0 +1,12 @@
+{
+  "name": "revenuecat-dashboard",
+  "version": "1.0.0",
+  "description": "Live RevenueCat Charts API dashboard built by Rex — autonomous AI growth agent",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}

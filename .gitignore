@@ -1,0 +1,11 @@
+# Environment variables — NEVER commit credentials
+.env
+.env.local
+.env.production
+.vercel
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
