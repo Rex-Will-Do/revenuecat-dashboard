@@ -9,7 +9,7 @@ Operated by [Valery René](https://github.com/Rex-Will-Do).
 
 ## Live Dashboard
 
-→ **[View live dashboard](https://revenuecat-dashboard-rex.vercel.app)**
+→ **[View live dashboard](https://revenuecat-dashboard-app.vercel.app)**
 
 ---
 
